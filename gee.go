@@ -1,37 +1,35 @@
 package gee
 
 import (
-	"fmt"
 	"net/http"
 )
 
 // HandleFunc 定义使用的Handler的接口
-type HandleFunc func(http.ResponseWriter, *http.Request)
+type HandleFunc func(ctx *Context)
 
 // Engine 某个结构体实现了接口内的所有函数 就认为实现了该接口
 // 定义结构体Engine，实现ServeHTTP方法
 type Engine struct {
-	router map[string]HandleFunc
+	router *router
 }
 
 // New 定义Engine的构造器
 func New() *Engine {
 	// 这个make函数是做啥的嘞？好像是创建用的类似new对吗
 	// make专门创建 slice 哈希表 channel 这些复合类型的变量
-	return &Engine{router: make(map[string]HandleFunc)}
+	return &Engine{router: newRouter()}
 }
 
-func (engine *Engine) addRouter(method string, pattern string, handleFunc HandleFunc) {
-	key := method + "-" + pattern
-	engine.router[key] = handleFunc
+func (engine *Engine) addRouter(method string, pattern string, handle HandleFunc) {
+	engine.router.addRouter(method, pattern, handle)
 }
 
-func (engine *Engine) GET(pattern string, handleFunc HandleFunc) {
-	engine.addRouter("GET", pattern, handleFunc)
+func (engine *Engine) GET(pattern string, handle HandleFunc) {
+	engine.addRouter("GET", pattern, handle)
 }
 
-func (engine *Engine) POST(pattern string, handleFunc HandleFunc) {
-	engine.addRouter("POST", pattern, handleFunc)
+func (engine *Engine) POST(pattern string, handle HandleFunc) {
+	engine.addRouter("POST", pattern, handle)
 }
 
 // Run 启动 http serve
@@ -39,12 +37,8 @@ func (engine *Engine) Run(addr string) {
 	http.ListenAndServe(addr, engine)
 }
 func (engine *Engine) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	key := req.Method + "-" + req.URL.Path
-	if handler, ok := engine.router[key]; ok {
-		handler(w, req)
-	} else {
-		fmt.Fprintf(w, "404 NOT FOUND: %s\n", req.URL)
-	}
+	c := newContext(w, req)
+	engine.router.handle(c)
 }
 
 // Handler是一个接口，需要实现其中的ServeHTTP方法，用来解析URL并进行路由匹配
